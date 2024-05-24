@@ -28,7 +28,7 @@ The robot policy side of this project is not complete. Setup consists of followi
 
 ## Example Gaussian Splatting Renderings with LEGaussian
 
-Below are some masked out examples of LEGaussian on a real world scene that a robot might be asked to work in.
+Below are some masked out examples of LEGaussian on a real world scene that a robot might be asked to work in. Note that these images are novel views that a Gaussian Splatting model never saw.
 
 Toy Car
 ![Alt text](image-1.png)
