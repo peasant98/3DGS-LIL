@@ -1,0 +1,3 @@
+[submodule "LEGaussians"]
+	path = LEGaussians
+	url = https://github.com/peasant98/LEGaussians
