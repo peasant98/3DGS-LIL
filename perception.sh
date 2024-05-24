@@ -19,3 +19,13 @@ pip install tqdm plyfile timm open_clip_torch scipy six configargparse pysocks p
 cd submodules/diff-gaussian-rasterization/ && python -m pip install -e . && cd ../..
 # simple-knn
 cd submodules/simple-knn/ && python -m pip install -e . && cd ../..
+
+
+# copy the data into the LE Gaussian repo.
+mkdir -p LEGaussians/data/real-world/
+cp -r data/real-world/lab-scene/ LEGaussians/data/real-world/
+
+# cd LEGaussians/preprocess/
+# python quantize_features.py --config configs/real-world/lab-scene.cfg
+
+python train.py --config configs/real-world/lab.cfg
