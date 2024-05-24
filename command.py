@@ -6,12 +6,14 @@ if __name__ == "__main__":
     client = OpenAI()
     
     phrase = "pick up the xbox controller"
+    
+    content_to_send = f"I have the phrase '{phrase}'. What is the action, and what is the object? Remove all articles of speech."
 
     completion = client.chat.completions.create(
     model="gpt-3.5-turbo",
     messages=[
         {"role": "system", "content": "You are a word smith. You have been given a phrase and you must identify the action and object. Always give an answer."},
-        {"role": "user", "content": f"I have the phrase '{phrase}'. What is the action, and what is the object? Remove all articles of speech.."}
+        {"role": "user", "content": f"{content_to_send}"}
     ]
     )
     
@@ -23,5 +25,6 @@ if __name__ == "__main__":
     
     object_ = object_msg.split(": ")[-1].strip()
     
+    print("Content to send: ", content_to_send)
     print('Action to embed into Consistency Policy: ', action_msg)
     print('Object in question: ', object_)
