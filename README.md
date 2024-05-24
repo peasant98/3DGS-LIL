@@ -16,7 +16,10 @@ bash perception.sh
 
 After this, refer to LEGaussians for more steps on how to run.
 
-The robot policy side of this project is not complete. Setup consists of following [Consistency Policy](https://github.com/Aaditya-Prasad/Consistency-Policy/) to setup the robomimic environment.
+In this project, we start from a language command, which you can find in `command.py`. This requires OpenAI API key access to run and installing from `requirements.txt`. Running this file gives the object that we can provide to LEGaussian and the action command to embed into Consistency Policy (still in the works).
+
+
+The robot policy side of this project is not complete. Setup consists of following [Consistency Policy](https://github.com/Aaditya-Prasad/Consistency-Policy/) to setup the `robomimic` environment.
 
 
 ## Example Gaussian Splatting Renderings with LEGaussian
