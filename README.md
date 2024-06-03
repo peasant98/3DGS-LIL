@@ -1,5 +1,5 @@
-# 🐇 3D-LECoP
-3D Language Embedded Consistency Policy
+# 🐇 3DGS-LIL
+3D Gaussian Splatting Language-Conditioned Imitation Learning
 
 
 This work presents 3D Language Embedded Consistency Policy, a method for using language embeddings and Gaussian Splatting to learn a Consistency Policy. 
