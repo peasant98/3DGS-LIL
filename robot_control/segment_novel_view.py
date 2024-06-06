@@ -1,13 +1,16 @@
-# Segment out a novel view from a given image from GS.
-
+# Code to segment an object in a novel view using 3DGS and CLIPSeg
 
 from pathlib import Path
 
+import cv2
 from matplotlib import pyplot as plt
 import numpy as np
 import torch
 from scipy.spatial.transform import Rotation as R
 
+from transformers import CLIPProcessor, CLIPSegForImageSegmentation
+
+from PIL import Image
 
 from nerfstudio.utils.eval_utils import eval_setup
 from nerfstudio.engine.trainer import TrainerConfig
@@ -135,26 +138,73 @@ class GS():
             outputs = self.pipeline.model.get_outputs_for_camera(cameras)
             rgb = outputs["rgb"]
             depth = outputs["depth"]
+            
+            # convert rgb to numpy
+            rgb = rgb.cpu().numpy()
+            depth = depth.cpu().numpy()
             if visualize:
-                # convert rgb to numpy
-                rgb = rgb.cpu().numpy()
-                depth = depth.cpu().numpy()
-                # plot rgb and depth in the same figure
                 visualize_rgb_depth(rgb, depth)
             return rgb, depth
 
 class Segment3DGS():
     def __init__(self, gs_model: GS):
+        print("Loading 3DGS Model...")
         self.gs_model = gs_model
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # initialize the model
+        # initialize the clip models
+        self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        self.clipseg_model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd64-refined").to(self.device)
 
-    def segment_novel_view(self, x, object):
+    def segment_novel_view(self, x, object_name="chair", visualize=False):
         rgb, depth = self.gs_model.get_view(x)
+        # convert rgb to PIL image
+        rgb = Image.fromarray((rgb * 255).astype(np.uint8))
+        
+        inputs = self.clip_processor(text=[object_name], images=rgb, return_tensors="pt", padding=True).to(self.device)
+        
+        # Get segmentation
+        with torch.no_grad():
+            print("Running segmentation...")
+            outputs = self.clipseg_model(**inputs)
+        logits_np = outputs.logits.sigmoid().cpu().numpy()
+        rgb = np.array(rgb)
+        
+        mask = logits_np >= 0.3
+        mask = np.array(mask, dtype=np.uint8)
+        
+        # resize mask to original size
+        mask = cv2.resize(mask, (720, 720))
+        
+        overlay = np.zeros_like(rgb)
+        overlay[mask > 0] = (255, 0, 0) 
+        
+        # Ensure the mask is binary
+        alpha = 0.4  # Transparency factor
+        output = cv2.addWeighted(overlay, alpha, rgb, 1 - alpha, 0)
+        if visualize:
+            self.visualize_clipseg(rgb, output, object_name)
+        
+        return rgb, depth, mask
+        
 
-
+    def visualize_clipseg(self, rgb, output, object_name):
+        fig, ax = plt.subplots(1, 2)
+        ax[0].imshow(rgb)
+        ax[1].imshow(output)
+        # no axis
+        ax[0].axis('off')
+        ax[1].axis('off')
+        # title is object name
+        ax[0].set_title('novel view')
+        ax[1].set_title(object_name)
+        plt.show()
+        
 if __name__ == '__main__':
-    # best depth 
+    full_phrase = "move to the chair"
+    
+    
+    # splatfacto run
     config_path = 'outputs/panda-data/splatfacto/2024-06-05_151435/config.yml'
     
     gs = GS(config_path)
@@ -162,6 +212,13 @@ if __name__ == '__main__':
     # get view with novel camera pose
     position = [0.20582463, -0.27465796,  0.87886065]
     quat = [0.43362391, -0.37937454, -0.56434611,  0.59123492]
-    gs.get_view((position, quat), visualize=True)
+    gs.get_view((position, quat), visualize=False)
     
-    print('Segmenting novel view...')
+    segmenter = Segment3DGS(gs)
+    
+    # segment novel view
+    for i in range(10):
+        rgb, depth, mask = segmenter.segment_novel_view((position, quat), object_name="chairs")
+        position[1] += 0.1
+    
+    
