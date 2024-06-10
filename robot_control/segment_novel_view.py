@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import time
 import cv2
 from matplotlib import pyplot as plt
 import numpy as np
@@ -18,6 +19,9 @@ from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManager, Va
 from nerfstudio.data.datamanagers.full_images_datamanager import FullImageDatamanagerConfig
 from nerfstudio.cameras.cameras import Cameras, CameraType
 from nerfstudio.cameras import camera_utils
+
+# from command import OpenAICommander
+from command import OpenAICommander
 
 
 CAMERA_CONFIG = {
@@ -83,6 +87,11 @@ class GS():
         self.fy = torch.tensor([[CAMERA_CONFIG['fy']]]).to(self.device)
         self.height = torch.tensor([[CAMERA_CONFIG['height']]]).to(self.device)
         self.width = torch.tensor([[CAMERA_CONFIG['width']]]).to(self.device)
+        
+        self.times = []
+
+    def get_avg_time(self):
+        return np.mean(self.times)
 
     def get_view(self, x, visualize=False):
         """_summary_
@@ -135,7 +144,11 @@ class GS():
         ).to(self.device)
         
         with torch.no_grad():
+            start  = time.time()
             outputs = self.pipeline.model.get_outputs_for_camera(cameras)
+            end = time.time()
+            self.times.append(end - start)
+            
             rgb = outputs["rgb"]
             depth = outputs["depth"]
             
@@ -156,34 +169,35 @@ class Segment3DGS():
         self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         self.clipseg_model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd64-refined").to(self.device)
 
-    def segment_novel_view(self, x, object_name="chair", visualize=False):
-        rgb, depth = self.gs_model.get_view(x)
+    def segment_novel_view(self, x, object_name="chair", visualize=False, segment=False):
+        rgb, depth = self.gs_model.get_view(x, visualize=visualize)
         # convert rgb to PIL image
         rgb = Image.fromarray((rgb * 255).astype(np.uint8))
-        
-        inputs = self.clip_processor(text=[object_name], images=rgb, return_tensors="pt", padding=True).to(self.device)
-        
+        mask = None
         # Get segmentation
-        with torch.no_grad():
-            print("Running segmentation...")
-            outputs = self.clipseg_model(**inputs)
-        logits_np = outputs.logits.sigmoid().cpu().numpy()
-        rgb = np.array(rgb)
-        
-        mask = logits_np >= 0.3
-        mask = np.array(mask, dtype=np.uint8)
-        
-        # resize mask to original size
-        mask = cv2.resize(mask, (720, 720))
-        
-        overlay = np.zeros_like(rgb)
-        overlay[mask > 0] = (255, 0, 0) 
-        
-        # Ensure the mask is binary
-        alpha = 0.4  # Transparency factor
-        output = cv2.addWeighted(overlay, alpha, rgb, 1 - alpha, 0)
-        if visualize:
-            self.visualize_clipseg(rgb, output, object_name)
+        if segment:
+            inputs = self.clip_processor(text=[object_name], images=rgb, return_tensors="pt", padding=True).to(self.device)
+            with torch.no_grad():
+                outputs = self.clipseg_model(**inputs)
+            logits_np = outputs.logits.sigmoid().cpu().numpy()
+            
+            mask = logits_np >= 0.5
+            mask = np.array(mask, dtype=np.uint8)
+            
+            # resize mask to original size
+            mask = cv2.resize(mask, (720, 720))
+            
+            mask = np.array(mask, dtype=np.uint8)
+            
+            overlay = np.zeros_like(rgb)
+            overlay[mask > 0] = (255, 0, 0) 
+            
+            # Ensure the mask is binary
+            alpha = 0.4  # Transparency factor
+            if visualize:
+                rgb = np.array(rgb)
+                output = cv2.addWeighted(overlay, alpha, rgb, 1 - alpha, 0)
+                self.visualize_clipseg(rgb, output, object_name)
         
         return rgb, depth, mask
         
@@ -201,7 +215,13 @@ class Segment3DGS():
         plt.show()
         
 if __name__ == '__main__':
-    full_phrase = "move to the chair"
+    full_phrase = "push the table"
+    
+    commander = OpenAICommander()
+    action, object_ = commander.get_action_and_object(full_phrase)
+    
+    print("Action: ", action)
+    print("Object: ", object_)
     
     
     # splatfacto run
@@ -216,9 +236,17 @@ if __name__ == '__main__':
     
     segmenter = Segment3DGS(gs)
     
+    # inputs to network are rgb, depth, mask, and
+    
+    rgb, depth, mask = segmenter.segment_novel_view((position, quat), object_name=object_, visualize=True)
+    # plot all three: rgb, depth, mask
+    position[1] += 0.5
+    
+    
     # segment novel view
-    for i in range(10):
-        rgb, depth, mask = segmenter.segment_novel_view((position, quat), object_name="chairs")
-        position[1] += 0.1
+    objects = ['white object', 'chair', 'table', 'window', 'floor', 'wall']
+    for i in range(6):
+        object_ = objects[i]
+        rgb, depth, mask = segmenter.segment_novel_view((position, quat), object_name=object_, visualize=True, segment=True)
     
     
